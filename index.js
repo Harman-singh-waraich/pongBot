@@ -9,13 +9,17 @@ const {
   addToQueue,
   getEvent,
 } = require("./helpers/queueManager.js");
+const { isNetworkAvailable } = require("./helpers/utils.js");
+const { waitForNetwork } = require("./helpers/utils.js");
 
-let rpcRetry = 0;
+//variables to monitor bot
 let startBlock = null;
 let lastPongBlock = null;
 //maintain only one blocks txn hashes
 let lastPongHashes = [];
+const processedEvents = new Set();
 
+//start from "startBlock" and sync up the events
 async function syncLastBlock(contract, startBlock) {
   //we need to take in account the case , when we are handling events in a block and the bot crashes,
   //since then if we restart it will start fetching the events from same block and might consume the same event twice
@@ -32,7 +36,6 @@ async function syncLastBlock(contract, startBlock) {
     startBlock,
     startBlock
   );
-  console.log("same", resumeBlockLogs);
   if (resumeBlockLogs.length) {
     for (const log of resumeBlockLogs) {
       console.log(lastPongHashes);
@@ -43,7 +46,6 @@ async function syncLastBlock(contract, startBlock) {
   }
 
   const logs = await contract.queryFilter("Ping", startBlock + 1, "latest");
-  console.log(logs);
   if (logs.length) {
     addToQueue(logs);
   }
@@ -52,13 +54,18 @@ async function syncLastBlock(contract, startBlock) {
   //after loaded start a listner to listen to new ones
 }
 
+//consume events from events queue
 async function startConsuming() {
-  setInterval(async () => {
+  const consumerId = setInterval(async () => {
     const event = getEvent();
     if (!event) return;
-    console.log("handling", event);
+
     const block = event.blockNumber ?? event.log.blockNumber;
     const hash = event.transactionHash ?? event.log.transactionHash;
+
+    //sometimes the event may fire twice due to some reason
+    if (lastPongHashes.includes(hash) || processedEvents.has(hash)) return;
+
     console.log("Consuming event with block : ", block, "hash :", hash);
 
     //if we enter a new block, maintain a new last block hash array
@@ -68,15 +75,17 @@ async function startConsuming() {
     } else {
       lastPongHashes.push(hash);
     }
-
+    processedEvents.add(hash);
     saveResumeData(lastPongBlock, lastPongHashes);
   }, 5000);
+
+  return consumerId;
 }
 
 async function main() {
   try {
     createQueue();
-    const provider = getProvider(rpcRetry);
+    const provider = getProvider();
     const resumeData = loadResumeData();
 
     const currentBlock = await provider.getBlockNumber();
@@ -97,19 +106,33 @@ async function main() {
 
     await syncLastBlock(contract, startBlock);
 
+    console.log("starting live listening");
+
     contract.on("Ping", (event) => {
       console.log("found event");
       addToQueue([event]);
     });
 
-    await startConsuming();
+    //start responding to events
+    const consumerId = await startConsuming();
+
+    // Add a listener to check network status every 1 min
+    while (true) {
+      const available = await isNetworkAvailable(provider);
+      if (!available) {
+        //clearing all interval before pasuing
+        clearInterval(consumerId);
+        contract.removeAllListeners();
+
+        throw new Error("Network is down");
+      }
+      await new Promise((r) => setTimeout(r, 60000));
+    }
   } catch (err) {
     console.error("Error:", err);
-    rpcRetry++;
-
-    if (rpcRetry >= 4) {
-      console.error(`Max retry limit reached. Exiting...`);
-      process.exit(1);
+    if (err.message == "Network is down") {
+      await waitForNetwork();
+      return main();
     }
   }
 }
