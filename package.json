@@ -1,0 +1,19 @@
+{
+  "name": "pongbot",
+  "version": "1.0.0",
+  "description": "A bot that pongs for every ping",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Harmeet singh",
+  "license": "ISC",
+  "dependencies": {
+    "ethers": "^6.8.0",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  }
+}
