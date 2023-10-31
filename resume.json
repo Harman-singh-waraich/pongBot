@@ -1,6 +1,11 @@
 {
-  "lastPongBlock": 9958638,
+  "lastPongBlock": 9963135,
   "lastBlockHashes": [
-    "0x15d57cbcb991574277c780fabdb428d05c527189fd0046b1fc5208a97e437bfd"
-  ]
+    "0xb46ddcebfa5dcefa3a3c1328ed0002254900be58bf786be79bf35d0438d12da4"
+  ],
+  "pendingTxn": {
+    "hash": "0x712a1dff5094bf67539f8751cea8bb454bad973b8909aac5130bed385097fe22",
+    "pingHash": "0xb46ddcebfa5dcefa3a3c1328ed0002254900be58bf786be79bf35d0438d12da4",
+    "block": 9963135
+  }
 }

@@ -1,5 +1,5 @@
 const fs = require("fs");
-
+//kafka alternative
 let eventQueue = [];
 const QUEUE_FILE_PATH = "eventQueue.json";
 
@@ -11,6 +11,7 @@ function addToQueue(items) {
   eventQueue.push(...items);
 }
 
+//keeping these in case i wanna save the queue locally
 function saveQueueToFile() {
   try {
     fs.writeFileSync(QUEUE_FILE_PATH, JSON.stringify(eventQueue));
