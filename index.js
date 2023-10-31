@@ -47,7 +47,7 @@ async function checkPendingTxn(provider) {
 
     console.log(resumeState.pendingTxn.hash, "was succesfull\n");
 
-    const block = txnReceipt.blockNumber;
+    const block = resumeState.pendingTxn.block;
     const hash = resumeState.pendingTxn.pingHash;
 
     //when the last pending txn is done, remove it from the pending hash and also update the processed events and other variables
@@ -60,9 +60,10 @@ async function checkPendingTxn(provider) {
     processedEvents.add(hash);
 
     saveResumeData({ lastPongBlock, lastBlockHashes, pendingTxn: null });
-    return txnReceipt;
+    return;
   } catch (err) {
     console.log("Error checking pending txn", err.message);
+    return;
   }
 }
 
@@ -104,7 +105,10 @@ async function syncLastBlock(contract, startBlock) {
     addToQueue(logs);
   }
 
-  console.log("inital load done\n");
+  console.log(
+    "inital load done\n",
+    `Found ${resumeBlockLogs.length + logs.length} events`
+  );
   //after loaded start a listner to listen to new ones
 }
 
@@ -125,7 +129,8 @@ async function startConsuming(provider) {
   const hash = event.transactionHash ?? event.log.transactionHash;
 
   //sometimes the event may fire twice due fallback providers
-  if (lastBlockHashes.includes(hash) || processedEvents.has(hash)) return;
+  if (lastBlockHashes.includes(hash) || processedEvents.has(hash))
+    return startConsuming(provider);
 
   console.log("Consuming event with block : ", block, "hash :", hash, "\n");
   await sendTransactionWithRetry(hash, block);
@@ -159,10 +164,10 @@ async function main() {
     if (!resumeData) {
       startBlock = currentBlock;
       console.log("Starting from block : ", startBlock);
+      saveResumeData({ startBlock });
     } else {
       startBlock = resumeData?.lastPongBlock;
       console.log("Resuming from block : ", startBlock);
-      saveResumeData({ startBlock });
     }
 
     // initial load of events
@@ -189,6 +194,7 @@ async function main() {
       //check if the last pending txn was success or not
       await checkPendingTxn(provider);
     }
+    console.log("Starting consuming.. \n");
     //start responding to events
     startConsuming(provider);
 
@@ -208,6 +214,10 @@ async function main() {
     if (err.message == "Network is down") {
       await waitForNetwork();
       return main();
+    } else {
+      await new Promise((r) => setTimeout(r, 600000)); //wait 10 min and try again
+      console.log("Attempting Restart..\n");
+      main();
     }
   }
 }
